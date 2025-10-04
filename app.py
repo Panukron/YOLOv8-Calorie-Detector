@@ -377,60 +377,119 @@ def process_image(frame, coin_model, food_models, high_accuracy_mode):
 # --- 6. ฟังก์ชันหลัก Streamlit UI ---
 def main():
     st.set_page_config(page_title="YOLOv8 Calorie Detector", layout="wide")
-    st.title("🍽️ Calorie Detection Web App")
+    st.title("🍽️ AI Calorie Detection Web App")
+    st.markdown("##### 🔍 Select a sample image below to see the result instantly, or upload your own photo in the sidebar.")
     
-    # --- Sidebar สำหรับการตั้งค่า ---
+    # --- 1. ตรวจสอบและแสดงรูปภาพตัวอย่าง ---
+    TEST_IMAGE_DIR = "testpic"
+    uploaded_file = None
+    
+    # ดึงรายชื่อไฟล์
+    if os.path.exists(TEST_IMAGE_DIR):
+        all_files = os.listdir(TEST_IMAGE_DIR)
+        image_files = [f for f in all_files if f.lower().endswith(('.png', '.jpg', '.jpeg', '.jfif'))] # เพิ่ม .jfif
+    else:
+        image_files = []
+        st.error(f"Error: '{TEST_IMAGE_DIR}' folder not found on the server.")
+        
+    # --- 2. สร้าง Gallery รูปภาพที่คลิกได้ ---
+    if image_files:
+        st.subheader("Example Images (Click to Select)")
+        
+        # จัดการการแสดงผลในคอลัมน์ (ปรับจำนวนคอลัมน์ตามความเหมาะสม)
+        cols = st.columns(min(len(image_files), 5)) 
+        
+        # ใช้ st.session_state เพื่อเก็บไฟล์ที่ผู้ใช้เลือก
+        if 'selected_sample_file' not in st.session_state:
+            st.session_state.selected_sample_file = None
+            
+        # สร้างปุ่มและรูปภาพสำหรับเลือก
+        for i, file_name in enumerate(image_files):
+            with cols[i % 5]: # แสดงผลทีละ 5 คอลัมน์
+                file_path = os.path.join(TEST_IMAGE_DIR, file_name)
+                
+                # แสดงรูปภาพตัวอย่าง
+                try:
+                    # ใช้ PIL เพื่อแสดงผลรูปภาพ
+                    sample_image = Image.open(file_path)
+                    st.image(sample_image, caption=file_name, width=100)
+                except Exception as e:
+                    st.error(f"Cannot display {file_name}")
+                    
+                # สร้างปุ่ม 'Select'
+                if st.button(f"Select {i+1}", key=f"select_btn_{i}"):
+                    st.session_state.selected_sample_file = file_path
+                    # บังคับให้ Streamlit รันโค้ดใหม่ (rerun) เพื่อใช้ไฟล์ที่เลือก
+                    st.rerun()
+
+    # --- 3. ตรวจสอบว่าผู้ใช้เลือกไฟล์ตัวอย่างแล้วหรือไม่ ---
+    if st.session_state.selected_sample_file:
+        selected_file_path = st.session_state.selected_sample_file
+        
+        # อ่านไฟล์ที่เลือกโดยตรงจาก Path
+        with open(selected_file_path, "rb") as f:
+            image_data = f.read()
+        
+        # สร้างวัตถุคล้าย uploaded_file สำหรับโค้ดส่วนอื่น
+        uploaded_file = BytesIO(image_data)
+        uploaded_file.name = os.path.basename(selected_file_path) # ใช้ชื่อไฟล์จริง
+
+        st.success(f"Selected sample image: **{uploaded_file.name}**")
+        
+    # --- 4. Sidebar สำหรับการตั้งค่าและการอัปโหลดไฟล์ส่วนตัว (ถ้าต้องการ) ---
     with st.sidebar:
         st.header("⚙️ Settings")
         high_accuracy_mode = st.checkbox("High Accuracy Mode (ใช้การตรวจจับเหรียญ/บัตร)", value=True)
         st.markdown("---")
         
-        st.header("Upload Image")
-        uploaded_file = st.file_uploader("เลือกไฟล์รูปภาพ", type=['jpg', 'jpeg', 'png'])
+        st.header("Or Upload Your Own Image")
+        # ผู้ใช้สามารถอัปโหลดไฟล์ส่วนตัวได้ หากเลือกอัปโหลด จะใช้ไฟล์นี้แทนไฟล์ตัวอย่าง
+        user_uploaded_file = st.file_uploader("เลือกไฟล์รูปภาพ", type=['jpg', 'jpeg', 'png', 'jfif'])
         
+        if user_uploaded_file is not None:
+             uploaded_file = user_uploaded_file # ใช้ไฟล์ที่ผู้ใช้อัปโหลดแทนไฟล์ตัวอย่าง
+
         st.markdown("---")
         st.subheader("Model Status")
         coin_model, food_models, model_status = load_models()
         st.caption(model_status)
 
 
-    # --- ส่วนแสดงผลลัพธ์หลัก ---
+    # --- 5. ส่วนแสดงผลลัพธ์หลัก ---
     
-    # 1. แสดง Total Calories 
+    # Placeholder สำหรับ Total Calories
     col1, col2 = st.columns([1, 2])
     
     with col1:
-        total_cal_placeholder = st.empty() # Placeholder สำหรับอัปเดตค่าแคลอรี่
+        total_cal_placeholder = st.empty()
         total_cal_placeholder.metric(label="Total Estimated Calories", value="0.0 kcal", delta="Waiting for image...")
 
-    # 2. แสดงผลลัพธ์การประมวลผล
     if uploaded_file is not None:
-        
-        # 2.1 อ่านไฟล์ที่อัปโหลดและแปลงเป็น OpenCV Frame
+        # 5.1 โค้ดเดิมสำหรับการประมวลผล
         try:
-            image_data = uploaded_file.read()
-            image_pil = Image.open(BytesIO(image_data)).convert("RGB")
+            # อ่านไฟล์ที่อัปโหลด/เลือกแล้วแปลงเป็น OpenCV Frame
+            image_pil = Image.open(uploaded_file).convert("RGB")
             image_np = np.array(image_pil)
             frame = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
             
             with st.spinner('Running YOLOv8 detection and calculation...'):
                 processed_image, total_calories, info_markdown = process_image(frame, coin_model, food_models, high_accuracy_mode)
             
-            # 2.2 อัปเดต Total Calories
+            # 5.2 อัปเดต Total Calories
             total_cal_placeholder.metric(label="Total Estimated Calories", value=f"{total_calories:.1f} kcal", delta="Estimated")
             
-            # 2.3 แสดงภาพผลลัพธ์
-            st.image(processed_image, caption='Image with Detection Results', use_column_width=True)
+            # 5.3 แสดงภาพผลลัพธ์
+            st.image(processed_image, caption=f'Detection Results for {uploaded_file.name}', use_column_width=True)
             
-            # 2.4 แสดงรายการแคลอรี่
+            # 5.4 แสดงรายการแคลอรี่
             st.subheader("Detected Items and Calorie Breakdown")
             st.markdown(info_markdown)
             
         except Exception as e:
-            st.error(f"An error occurred during processing. Please ensure all required libraries are installed: {e}")
-            st.info("Check your 'requirements.txt' and the content of the 'models' folder.")
+            st.error(f"An error occurred during processing: {e}")
+            st.info("Please ensure you have resolved the dependency issues and have valid models.")
     else:
-        st.info("Please upload an image file using the file uploader in the sidebar to start calorie detection.")
+        st.info("👈 Please select a sample image above or upload your own image from the sidebar to begin.")
 
 if __name__ == '__main__':
     main()
