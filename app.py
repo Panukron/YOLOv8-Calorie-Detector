@@ -260,7 +260,7 @@ def process_image(frame, coin_model, food_models, high_accuracy_mode):
     
     indices = cv2.dnn.NMSBoxes(raw_boxes, raw_scores, 0.45, 0.5) if raw_boxes else []
 
-    
+   
     aggregated_detections = {}
     if len(indices) > 0:
         for i in indices.flatten():
@@ -273,7 +273,7 @@ def process_image(frame, coin_model, food_models, high_accuracy_mode):
                 aggregated_detections[class_name_raw] = []
             aggregated_detections[class_name_raw].append(box)
 
-   
+  
     detected_items_info = []
     
     
@@ -314,7 +314,7 @@ def process_image(frame, coin_model, food_models, high_accuracy_mode):
         base_weight = food_info.get("avg_weight_g", 0)
         box_color = get_color_by_type(class_name)
         
-        
+      
         if high_accuracy_mode and pixels_per_mm:
             estimated_weight_g_list = []
             for box in boxes:
@@ -336,7 +336,7 @@ def process_image(frame, coin_model, food_models, high_accuracy_mode):
                     
                     final_weight_g += (len(boxes) - 1) * (base_weight * 0.25)
         
-        
+      
         if final_weight_g > 0:
             calories = (final_weight_g / 100) * food_info["kcal_per_100g"]
             total_calories += calories
@@ -358,7 +358,7 @@ def process_image(frame, coin_model, food_models, high_accuracy_mode):
             
             cv2.putText(display_frame, text_label, (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
             
-    
+   
     warning_string = ""
     if high_accuracy_mode and not pixels_per_mm and len(indices) > 0:
         warning_string = "**คำเตือน:** เปิดโหมด High Accuracy แต่ไม่พบวัตถุอ้างอิง (เหรียญ/บัตรเครดิต) การคำนวณน้ำหนักอาจคลาดเคลื่อน\n\n"
@@ -391,10 +391,10 @@ def main():
     if image_files:
         st.subheader("Example Images (Click to Select)")
         
-      
+       
         cols = st.columns(min(len(image_files), 5)) 
         
-       
+        
         if 'selected_sample_file' not in st.session_state:
             st.session_state.selected_sample_file = None
             
@@ -403,7 +403,7 @@ def main():
             with cols[i % 5]: 
                 file_path = os.path.join(TEST_IMAGE_DIR, file_name)
                 
-              
+                
                 try:
                     
                     sample_image = Image.open(file_path)
@@ -411,17 +411,17 @@ def main():
                 except Exception as e:
                     st.error(f"Cannot display {file_name}")
                     
-             
+                
                 if st.button(f"Select {i+1}", key=f"select_btn_{i}"):
                     st.session_state.selected_sample_file = file_path
-                   
+                    
                     st.rerun()
 
     
     if st.session_state.selected_sample_file:
         selected_file_path = st.session_state.selected_sample_file
         
-        
+      
         with open(selected_file_path, "rb") as f:
             image_data = f.read()
         
@@ -431,14 +431,14 @@ def main():
 
         st.success(f"Selected sample image: **{uploaded_file.name}**")
         
-   
+    
     with st.sidebar:
         st.header("⚙️ Settings")
         high_accuracy_mode = st.checkbox("High Accuracy Mode (ใช้การตรวจจับเหรียญ/บัตร)", value=True)
         st.markdown("---")
         
         st.header("Or Upload Your Own Image")
-     
+        
         user_uploaded_file = st.file_uploader("เลือกไฟล์รูปภาพ", type=['jpg', 'jpeg', 'png', 'jfif'])
         
         if user_uploaded_file is not None:
@@ -448,7 +448,13 @@ def main():
         st.subheader("Model Status")
         coin_model, food_models, model_status = load_models()
         st.caption(model_status)
+<<<<<<< Updated upstream
         
+=======
+
+
+   
+>>>>>>> Stashed changes
     col1, col2 = st.columns([1, 2])
     
     with col1:
@@ -472,7 +478,7 @@ def main():
             
             st.image(processed_image, caption=f'Detection Results for {uploaded_file.name}', use_column_width=True)
             
-           
+          
             st.subheader("Detected Items and Calorie Breakdown")
             st.markdown(info_markdown)
             
