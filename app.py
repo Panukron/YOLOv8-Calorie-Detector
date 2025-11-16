@@ -448,13 +448,7 @@ def main():
         st.subheader("Model Status")
         coin_model, food_models, model_status = load_models()
         st.caption(model_status)
-<<<<<<< Updated upstream
-        
-=======
 
-
-   
->>>>>>> Stashed changes
     col1, col2 = st.columns([1, 2])
     
     with col1:
