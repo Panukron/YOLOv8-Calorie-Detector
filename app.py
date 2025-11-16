@@ -9,8 +9,6 @@ import os
 from PIL import Image
 from io import BytesIO
 
-# --- 1. ฐานข้อมูลอาหาร (คัดลอกมาจาก Kivy) ---
-# NOTE: คุณต้องใส่ข้อมูล food_metadata ทั้งหมดจาก main.py มาวางที่นี่
 food_metadata = {
     "sausage":             {"kcal_per_100g": 300, "protein_g": 13.0, "fat_g": 27.0, "carb_g": 1.0,  "vitamins": "B12, B6",    "type": "countable", "avg_weight_g": 50},
     "fried_egg":           {"kcal_per_100g": 196, "protein_g": 13.0, "fat_g": 15.0, "carb_g": 1.0,  "vitamins": "A, D, B12",  "type": "countable", "avg_weight_g": 55},
@@ -150,13 +148,11 @@ REFERENCE_OBJECTS = {
     "1": {"width_mm": 20, "height_mm": 20},
     "creditcard": {"width_mm": 85.6, "height_mm": 53.98},
 }
-# --- จบส่วนคัดลอกข้อมูลอาหาร ---
 
-# --- 2. การตั้งค่าโมเดล ---
 MODELS_DIR = "models"
 COIN_MODEL_NAME = "coin_detector.pt" 
 
-# --- 3. ฟังก์ชันโหลดโมเดล (ใช้ Streamlit cache เพื่อให้โหลดเพียงครั้งเดียว) ---
+
 @st.cache_resource
 def load_models():
     st.info("Loading models... This may take a moment.")
@@ -188,7 +184,7 @@ def load_models():
     except Exception as e:
         return None, [], f"Error loading models: {e}"
 
-# --- 4. ฟังก์ชันคำนวณน้ำหนัก (ปรับจาก Kivy) ---
+
 def estimate_food_weight(x1, y1, x2, y2, pixels_per_mm, food_info):
     if not pixels_per_mm or "density_g_per_cm3" not in food_info: return None 
     
@@ -209,9 +205,9 @@ def estimate_food_weight(x1, y1, x2, y2, pixels_per_mm, food_info):
         radius_cm = diameter_cm / 2 
         height_of_cylinder_cm = max(width_cm, height_cm)
         estimated_volume_cm3 = np.pi * (radius_cm**2) * height_of_cylinder_cm 
-    else: # irregular
+    else: 
         area_cm2 = width_cm * height_cm
-        # assumed_thickness_cm = ((width_cm + height_cm) / 2) * 0.35 # ใช้ค่าจาก Kivy
+        
         assumed_thickness_cm = ((width_cm + height_cm) / 2) * 0.35 
         estimated_volume_cm3 = area_cm2 * assumed_thickness_cm 
         
@@ -219,7 +215,7 @@ def estimate_food_weight(x1, y1, x2, y2, pixels_per_mm, food_info):
         return estimated_volume_cm3 * DENSITY
     return None
 
-# --- 5. ฟังก์ชันประมวลผลหลัก (ปรับจาก Kivy ให้เป็น Streamlit) ---
+
 def process_image(frame, coin_model, food_models, high_accuracy_mode):
     if not food_models and not coin_model:
         return frame, 0, ["**ERROR:** Models not loaded. Please check the 'models' folder."]
@@ -231,7 +227,7 @@ def process_image(frame, coin_model, food_models, high_accuracy_mode):
     def normalize_name(name):
         return name.lower().replace("_", "").replace("-", "")
 
-    # Step 1: Find reference object (Coin)
+   
     if high_accuracy_mode and coin_model:
         coin_results = coin_model(frame, conf=0.1, verbose=False)
         for r in coin_results:
@@ -248,40 +244,39 @@ def process_image(frame, coin_model, food_models, high_accuracy_mode):
                     break
             if pixels_per_mm: break
 
-    # Step 2: Run food models and NMS
-    # (ส่วนนี้ถูกปรับให้ใช้ NMS เพื่อรวมผลลัพธ์จากหลายโมเดลได้อย่างถูกต้อง)
+    
     raw_boxes, raw_scores, all_detections_for_nms = [], [], []
     for model in food_models:
         food_results = model(frame, verbose=False)
         for r in food_results:
             for box in r.boxes:
-                # ตรวจสอบว่าโมเดลตรวจจับวัตถุได้จริง
+                
                 if box.xyxy.numel() > 0:
                     x1, y1, x2, y2 = box.xyxy[0]; w, h = x2 - x1, y2 - y1
-                    # NMS ต้องการ (x, y, w, h)
+                    
                     raw_boxes.append([int(x1), int(y1), int(w), int(h)]) 
                     raw_scores.append(float(box.conf[0]))
                     all_detections_for_nms.append(box)
     
     indices = cv2.dnn.NMSBoxes(raw_boxes, raw_scores, 0.45, 0.5) if raw_boxes else []
 
-    # Step 3: Aggregate unique detections (เหมือนโค้ดเดิม)
+   
     aggregated_detections = {}
     if len(indices) > 0:
         for i in indices.flatten():
             box = all_detections_for_nms[i]
             class_id = int(box.cls[0])
-            # WARNING: Assume all food models share the same names list (Simplification)
+            
             class_name_raw = food_models[0].names[class_id]
             
             if class_name_raw not in aggregated_detections:
                 aggregated_detections[class_name_raw] = []
             aggregated_detections[class_name_raw].append(box)
 
-    # Step 4: Process aggregated results and draw boxes
+  
     detected_items_info = []
     
-    # Dictionary สำหรับกำหนดสีของแต่ละประเภทอาหาร (คัดลอกมาจาก Kivy)
+    
     color_map = {
         "meat": (0, 165, 255), "seafood": (255, 105, 65), "noodle": (0, 255, 255), 
         "vegetable": (0, 200, 0), "fruit": (150, 50, 200), "egg": (0, 200, 255), "other": (200, 200, 200)
@@ -319,7 +314,7 @@ def process_image(frame, coin_model, food_models, high_accuracy_mode):
         base_weight = food_info.get("avg_weight_g", 0)
         box_color = get_color_by_type(class_name)
         
-        # --- การคำนวณน้ำหนัก (คัดลอกตรรกะเดิม) ---
+      
         if high_accuracy_mode and pixels_per_mm:
             estimated_weight_g_list = []
             for box in boxes:
@@ -332,16 +327,16 @@ def process_image(frame, coin_model, food_models, high_accuracy_mode):
                 final_weight_g = sum(estimated_weight_g_list)
             else:
                 final_weight_g = base_weight * len(boxes) if food_type == "countable" else base_weight
-        else: # โหมด Quick / High Accuracy ที่ไม่พบวัตถุอ้างอิง
+        else: 
             if food_type == "bulk":
                 final_weight_g = base_weight
-            else: # "countable"
+            else: 
                 final_weight_g = base_weight
                 if len(boxes) > 1 and base_weight > 0:
-                    # เพิ่มน้ำหนัก 25% สำหรับชิ้นต่อไป
+                    
                     final_weight_g += (len(boxes) - 1) * (base_weight * 0.25)
         
-        # --- การคำนวณแคลอรี่และสร้างข้อความ ---
+      
         if final_weight_g > 0:
             calories = (final_weight_g / 100) * food_info["kcal_per_100g"]
             total_calories += calories
@@ -351,7 +346,7 @@ def process_image(frame, coin_model, food_models, high_accuracy_mode):
         else:
             detected_items_info.append(f"**{class_name_raw}**: No weight info (Weight 0g)")
 
-        # --- การวาดกรอบ (คัดลอกตรรกะเดิม) ---
+       
         for box in boxes:
             x1, y1, x2, y2 = map(int, box.xyxy[0])
             
@@ -363,7 +358,7 @@ def process_image(frame, coin_model, food_models, high_accuracy_mode):
             
             cv2.putText(display_frame, text_label, (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
             
-    # --- Step 5: สรุปผลลัพธ์ ---
+   
     warning_string = ""
     if high_accuracy_mode and not pixels_per_mm and len(indices) > 0:
         warning_string = "**คำเตือน:** เปิดโหมด High Accuracy แต่ไม่พบวัตถุอ้างอิง (เหรียญ/บัตรเครดิต) การคำนวณน้ำหนักอาจคลาดเคลื่อน\n\n"
@@ -374,80 +369,80 @@ def process_image(frame, coin_model, food_models, high_accuracy_mode):
     
     return display_frame_rgb, total_calories, info_markdown
 
-# --- 6. ฟังก์ชันหลัก Streamlit UI ---
+
 def main():
     st.set_page_config(page_title="YOLOv8 Calorie Detector", layout="wide")
     st.title("🍽️ AI Calorie Detection Web App")
     st.markdown("##### 🔍 Select a sample image below to see the result instantly, or upload your own photo in the sidebar.")
     
-    # --- 1. ตรวจสอบและแสดงรูปภาพตัวอย่าง ---
+    
     TEST_IMAGE_DIR = "testpic"
     uploaded_file = None
     
-    # ดึงรายชื่อไฟล์
+    
     if os.path.exists(TEST_IMAGE_DIR):
         all_files = os.listdir(TEST_IMAGE_DIR)
-        image_files = [f for f in all_files if f.lower().endswith(('.png', '.jpg', '.jpeg', '.jfif'))] # เพิ่ม .jfif
+        image_files = [f for f in all_files if f.lower().endswith(('.png', '.jpg', '.jpeg', '.jfif'))] 
     else:
         image_files = []
         st.error(f"Error: '{TEST_IMAGE_DIR}' folder not found on the server.")
         
-    # --- 2. สร้าง Gallery รูปภาพที่คลิกได้ ---
+    
     if image_files:
         st.subheader("Example Images (Click to Select)")
         
-        # จัดการการแสดงผลในคอลัมน์ (ปรับจำนวนคอลัมน์ตามความเหมาะสม)
+       
         cols = st.columns(min(len(image_files), 5)) 
         
-        # ใช้ st.session_state เพื่อเก็บไฟล์ที่ผู้ใช้เลือก
+        
         if 'selected_sample_file' not in st.session_state:
             st.session_state.selected_sample_file = None
             
-        # สร้างปุ่มและรูปภาพสำหรับเลือก
+       
         for i, file_name in enumerate(image_files):
-            with cols[i % 5]: # แสดงผลทีละ 5 คอลัมน์
+            with cols[i % 5]: 
                 file_path = os.path.join(TEST_IMAGE_DIR, file_name)
                 
-                # แสดงรูปภาพตัวอย่าง
+                
                 try:
-                    # ใช้ PIL เพื่อแสดงผลรูปภาพ
+                    
                     sample_image = Image.open(file_path)
                     st.image(sample_image, caption=file_name, width=100)
                 except Exception as e:
                     st.error(f"Cannot display {file_name}")
                     
-                # สร้างปุ่ม 'Select'
+                
                 if st.button(f"Select {i+1}", key=f"select_btn_{i}"):
                     st.session_state.selected_sample_file = file_path
-                    # บังคับให้ Streamlit รันโค้ดใหม่ (rerun) เพื่อใช้ไฟล์ที่เลือก
+                    
                     st.rerun()
 
-    # --- 3. ตรวจสอบว่าผู้ใช้เลือกไฟล์ตัวอย่างแล้วหรือไม่ ---
+    
     if st.session_state.selected_sample_file:
         selected_file_path = st.session_state.selected_sample_file
         
-        # อ่านไฟล์ที่เลือกโดยตรงจาก Path
+      
         with open(selected_file_path, "rb") as f:
             image_data = f.read()
         
-        # สร้างวัตถุคล้าย uploaded_file สำหรับโค้ดส่วนอื่น
+        
         uploaded_file = BytesIO(image_data)
-        uploaded_file.name = os.path.basename(selected_file_path) # ใช้ชื่อไฟล์จริง
+        uploaded_file.name = os.path.basename(selected_file_path) 
 
         st.success(f"Selected sample image: **{uploaded_file.name}**")
         
-    # --- 4. Sidebar สำหรับการตั้งค่าและการอัปโหลดไฟล์ส่วนตัว (ถ้าต้องการ) ---
+    
     with st.sidebar:
         st.header("⚙️ Settings")
         high_accuracy_mode = st.checkbox("High Accuracy Mode (ใช้การตรวจจับเหรียญ/บัตร)", value=True)
         st.markdown("---")
         
         st.header("Or Upload Your Own Image")
-        # ผู้ใช้สามารถอัปโหลดไฟล์ส่วนตัวได้ หากเลือกอัปโหลด จะใช้ไฟล์นี้แทนไฟล์ตัวอย่าง
+        
         user_uploaded_file = st.file_uploader("เลือกไฟล์รูปภาพ", type=['jpg', 'jpeg', 'png', 'jfif'])
         
         if user_uploaded_file is not None:
-             uploaded_file = user_uploaded_file # ใช้ไฟล์ที่ผู้ใช้อัปโหลดแทนไฟล์ตัวอย่าง
+             uploaded_file = user_uploaded_file 
 
         st.markdown("---")
         st.subheader("Model Status")
@@ -455,9 +450,7 @@ def main():
         st.caption(model_status)
 
 
-    # --- 5. ส่วนแสดงผลลัพธ์หลัก ---
-    
-    # Placeholder สำหรับ Total Calories
+   
     col1, col2 = st.columns([1, 2])
     
     with col1:
@@ -465,9 +458,9 @@ def main():
         total_cal_placeholder.metric(label="Total Estimated Calories", value="0.0 kcal", delta="Waiting for image...")
 
     if uploaded_file is not None:
-        # 5.1 โค้ดเดิมสำหรับการประมวลผล
+        
         try:
-            # อ่านไฟล์ที่อัปโหลด/เลือกแล้วแปลงเป็น OpenCV Frame
+            
             image_pil = Image.open(uploaded_file).convert("RGB")
             image_np = np.array(image_pil)
             frame = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
@@ -475,13 +468,13 @@ def main():
             with st.spinner('Running YOLOv8 detection and calculation...'):
                 processed_image, total_calories, info_markdown = process_image(frame, coin_model, food_models, high_accuracy_mode)
             
-            # 5.2 อัปเดต Total Calories
+           
             total_cal_placeholder.metric(label="Total Estimated Calories", value=f"{total_calories:.1f} kcal", delta="Estimated")
             
-            # 5.3 แสดงภาพผลลัพธ์
+            
             st.image(processed_image, caption=f'Detection Results for {uploaded_file.name}', use_column_width=True)
             
-            # 5.4 แสดงรายการแคลอรี่
+          
             st.subheader("Detected Items and Calorie Breakdown")
             st.markdown(info_markdown)
             
