@@ -227,7 +227,7 @@ def process_image(frame, coin_model, food_models, high_accuracy_mode):
     def normalize_name(name):
         return name.lower().replace("_", "").replace("-", "")
 
-    
+   
     if high_accuracy_mode and coin_model:
         coin_results = coin_model(frame, conf=0.1, verbose=False)
         for r in coin_results:
